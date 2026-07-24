@@ -1,10 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import { ticketService, commentService } from '../../services/api'
 
 // Initial state for tickets
 const initialState = {
   tickets: [],
   currentTicket: null,
   loading: false,
+  commentLoading: false,
   error: null,
   filters: {
     status: '',
@@ -25,124 +27,85 @@ export const fetchTickets = createAsyncThunk(
   'tickets/fetchTickets',
   async ({ page = 1, pageSize = 10, filters = {} }, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      const mockTickets = [
-        {
-          id: 1,
-          title: 'Sample Ticket 1',
-          description: 'This is a sample ticket description',
-          status: 'Open',
-          priority: 'High',
-          assignee: 'John Doe',
-          reporter: 'Jane Smith',
-          createdDate: new Date().toISOString(),
-          updatedDate: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          title: 'Sample Ticket 2',
-          description: 'Another sample ticket description',
-          status: 'In Progress',
-          priority: 'Medium',
-          assignee: 'Alice Johnson',
-          reporter: 'Bob Wilson',
-          createdDate: new Date().toISOString(),
-          updatedDate: new Date().toISOString(),
-        }
-      ]
-
+      const response = await ticketService.getTickets({
+        page,
+        limit: pageSize,
+        ...filters
+      });
+      
       return {
-        tickets: mockTickets,
-        totalCount: 2,
-        totalPages: 1,
-        currentPage: page,
+        tickets: response.data.data.tickets,
+        totalCount: response.data.data.pagination.totalCount,
+        totalPages: response.data.data.pagination.totalPages,
+        currentPage: response.data.data.pagination.currentPage,
         pageSize
-      }
+      };
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch tickets')
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch tickets');
     }
   }
-)
+);
 
 export const fetchTicketById = createAsyncThunk(
   'tickets/fetchTicketById',
   async (ticketId, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      return {
-        id: ticketId,
-        title: `Sample Ticket ${ticketId}`,
-        description: 'This is a sample ticket description with more details',
-        status: 'Open',
-        priority: 'High',
-        assignee: 'John Doe',
-        reporter: 'Jane Smith',
-        createdDate: new Date().toISOString(),
-        updatedDate: new Date().toISOString(),
-        comments: [
-          {
-            id: 1,
-            content: 'This is a sample comment',
-            author: 'John Doe',
-            timestamp: new Date().toISOString(),
-          }
-        ]
-      }
+      const response = await ticketService.getTicketById(ticketId);
+      const { ticket, comments } = response.data.data;
+      return { ...ticket, comments: comments || [] };
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch ticket')
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch ticket');
     }
   }
-)
+);
 
 export const createTicket = createAsyncThunk(
   'tickets/createTicket',
   async (ticketData, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      const newTicket = {
-        id: Date.now(), // Mock ID
-        ...ticketData,
-        createdDate: new Date().toISOString(),
-        updatedDate: new Date().toISOString(),
-      }
-      return newTicket
+      const response = await ticketService.createTicket(ticketData);
+      return response.data.data.ticket;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create ticket')
+      return rejectWithValue(error.response?.data?.message || 'Failed to create ticket');
     }
   }
-)
+);
 
 export const updateTicket = createAsyncThunk(
   'tickets/updateTicket',
   async ({ ticketId, updates }, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      return {
-        id: ticketId,
-        ...updates,
-        updatedDate: new Date().toISOString(),
-      }
+      const response = await ticketService.updateTicket(ticketId, updates);
+      return response.data.data.ticket;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update ticket')
+      return rejectWithValue(error.response?.data?.message || 'Failed to update ticket');
     }
   }
-)
+);
 
 export const deleteTicket = createAsyncThunk(
   'tickets/deleteTicket',
   async (ticketId, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      return ticketId
+      await ticketService.deleteTicket(ticketId);
+      return ticketId;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete ticket')
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete ticket');
     }
   }
-)
+);
+
+export const addComment = createAsyncThunk(
+  'tickets/addComment',
+  async ({ ticketId, content, author }, { rejectWithValue }) => {
+    try {
+      const response = await commentService.addComment(ticketId, { content, author });
+      return response.data.data.comment;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to add comment');
+    }
+  }
+);
 
 // Tickets slice
 const ticketsSlice = createSlice({
@@ -248,6 +211,24 @@ const ticketsSlice = createSlice({
       })
       .addCase(deleteTicket.rejected, (state, action) => {
         state.loading = false
+        state.error = action.payload
+      })
+      // Add comment cases
+      .addCase(addComment.pending, (state) => {
+        state.commentLoading = true
+        state.error = null
+      })
+      .addCase(addComment.fulfilled, (state, action) => {
+        state.commentLoading = false
+        if (state.currentTicket) {
+          if (!Array.isArray(state.currentTicket.comments)) {
+            state.currentTicket.comments = []
+          }
+          state.currentTicket.comments.push(action.payload)
+        }
+      })
+      .addCase(addComment.rejected, (state, action) => {
+        state.commentLoading = false
         state.error = action.payload
       })
   },

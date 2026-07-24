@@ -3,6 +3,18 @@
 ## Project Overview
 The Ticket Management System is a web-based application designed to facilitate the creation, management, and tracking of tickets within an organization.
 
+## Features
+- Create a ticket.
+- List tickets.
+- View ticket details.
+- Update ticket fields (title, description, priority, assignee).
+- Change ticket status through the enforced state machine.
+- Add comments to a ticket.
+- Keyword search and filter by status.
+- Persist all data; data survives restart.
+- Validate required fields; reject invalid input at the backend.
+- Show meaningful error states in the UI.
+
 ## Functional Requirements
 
 ### 1. Ticket Management

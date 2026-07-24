@@ -77,10 +77,10 @@ export const selectTicketCounts = createSelector(
     
     return {
       total: tickets.length,
-      open: tickets.filter(t => t.status === 'Open').length,
-      inProgress: tickets.filter(t => t.status === 'In Progress').length,
-      resolved: tickets.filter(t => t.status === 'Resolved').length,
-      closed: tickets.filter(t => t.status === 'Closed').length,
+      open: tickets.filter(t => t.status === 'open').length,
+      inProgress: tickets.filter(t => t.status === 'in_progress').length,
+      resolved: tickets.filter(t => t.status === 'resolved').length,
+      closed: tickets.filter(t => t.status === 'closed').length,
     }
   }
 )
@@ -130,7 +130,7 @@ export const selectHighPriorityTickets = createSelector(
     if (!tickets || tickets.length === 0) return []
     
     return tickets.filter(ticket => 
-      ticket.priority === 'High' || ticket.priority === 'Critical'
+      ticket.priority === 'high' || ticket.priority === 'critical'
     )
   }
 )

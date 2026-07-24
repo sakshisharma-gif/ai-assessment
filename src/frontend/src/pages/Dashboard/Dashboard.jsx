@@ -23,10 +23,21 @@ import './Dashboard.css'
  */
 const Dashboard = () => {
   const dispatch = useDispatch()
-  const kpiMetrics = useSelector(selectKPIMetrics)
-  const ticketsByPriority = useSelector(selectTicketsByPriority)
-  const assignedTickets = useSelector(selectAssignedTickets)
-  const recentTickets = useSelector(selectRecentTickets)
+  const kpiMetrics = useSelector(selectKPIMetrics) || {
+    totalTickets: 0,
+    openTickets: 0,
+    inProgressTickets: 0,
+    resolvedTickets: 0,
+    closedTickets: 0
+  }
+  const ticketsByPriority = useSelector(selectTicketsByPriority) || {
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0
+  }
+  const assignedTickets = useSelector(selectAssignedTickets) || []
+  const recentTickets = useSelector(selectRecentTickets) || []
   const loading = useSelector(selectDashboardLoading)
   const error = useSelector(selectDashboardError)
 

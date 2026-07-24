@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
-import authService from '../../services/authService'
+import { authService } from '../../services/api'
 
 // Initial state for authentication
 const initialState = {
@@ -85,21 +85,21 @@ export const verifyToken = createAsyncThunk(
   'auth/verifyToken',
   async (_, { rejectWithValue }) => {
     try {
-      const token = safeLocalStorage.getItem('token')
+      const token = safeLocalStorage.getItem('token');
       if (!token) {
-        throw new Error('No token found')
+        throw new Error('No token found');
       }
-      // For demo purposes, return mock user data
+      const response = await authService.getProfile();
       return {
-        user: { id: 1, username: 'demo', email: 'demo@example.com', fullName: 'Demo User', role: 'User' },
+        user: response.data.data.user,
         token
-      }
+      };
     } catch (error) {
-      safeLocalStorage.removeItem('token')
-      return rejectWithValue(error.message || 'Token verification failed')
+      safeLocalStorage.removeItem('token');
+      return rejectWithValue(error.response?.data?.message || 'Token verification failed');
     }
   }
-)
+);
 
 export const registerUser = createAsyncThunk(
   'auth/registerUser',

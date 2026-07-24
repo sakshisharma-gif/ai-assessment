@@ -2,98 +2,307 @@
 
 ## Summary
 
-Implements a complete full-stack Support Ticket Management System (TicketDesk) using React + Node.js + MongoDB. The application allows internal users to create, update, comment on, search, and progress tickets through an enforced status state machine.
+This PR implements a complete **Ticket Management System** with full CRUD operations, status state machine workflow, comment functionality, and dashboard analytics. The system consists of a Node.js/Express backend with MongoDB and a React/Redux frontend.
+
+**Key Highlights:**
+- Complete ticket lifecycle management with enforced state machine transitions
+- RESTful API with comprehensive validation and error handling
+- Responsive React frontend with search, filter, and pagination
+- Integration tests proving state machine rules
 
 ---
 
 ## Features Implemented
 
-### Core (All Mandatory Requirements)
-- ✅ Create tickets with title, description, priority, and optional assignee
-- ✅ List tickets with keyword search, status/assignee filters, sorting, and pagination
-- ✅ View ticket details with all fields and comment history
-- ✅ Update ticket fields (title, description, priority, assignee)
-- ✅ Status state machine with strict transition enforcement
-- ✅ Add comments (blocked on CLOSED/CANCELLED tickets)
-- ✅ Data persistence across restarts (MongoDB)
-- ✅ Backend validation with field-level error responses
-- ✅ Meaningful error states throughout the UI
+### Core Features
+- [x] **Create Ticket** - Form with title, description, priority, assignee, reporter, labels
+- [x] **List Tickets** - Paginated table with sorting and filtering
+- [x] **View Ticket Details** - Full ticket information with associated comments
+- [x] **Update Ticket** - Edit all fields including status transitions
+- [x] **Delete Ticket** - Remove ticket and cascade delete comments
+- [x] **Add Comments** - Add comments to tickets with author tracking
 
-### Stretch (All Optional Items Implemented)
-- ✅ Google OAuth 2.0 authentication + JWT (access in memory, refresh in HTTP-only cookie)
-- ✅ Role-based access control (admin / agent / user)
-- ✅ Filter by assignee + sort by createdAt/priority + full pagination
-- ✅ Toast notifications for all user actions
-- ✅ Block editing of terminal-state tickets (both BE guard + FE UX)
-- ✅ Persistent AI project context via Kiro steering files
+### State Machine (Mandatory)
+- [x] Valid transitions: `open` → `in_progress` → `resolved` → `closed`
+- [x] Cancellation: `open` → `cancelled`, `in_progress` → `cancelled`
+- [x] Terminal states: `closed` and `cancelled` reject all transitions
+- [x] Invalid transitions return clear error messages
+- [x] Integration tests verify all valid/invalid transition paths
+
+### Search & Filter
+- [x] Keyword search across title, description, assignee, reporter
+- [x] Filter by status (open, in_progress, resolved, closed, cancelled)
+- [x] Filter by priority (low, medium, high, critical)
+- [x] Filter by assignee
+- [x] Sorting by multiple fields (createdDate, updatedDate, priority, title)
+
+### Dashboard
+- [x] Total ticket counts by status
+- [x] Priority breakdown statistics
+- [x] Average resolution time calculation
+- [x] Recent activity feed
+- [x] User-specific dashboard view
+
 
 ---
 
 ## Technical Changes
 
-### Backend
-- Express + TypeScript REST API with layered architecture (Route → Controller → Service → Repository → Model)
-- Google OAuth via Passport.js + JWT (15min access / 7d refresh)
-- State machine enforced as a single `ALLOWED_TRANSITIONS` constant in the service layer
-- MongoDB with Mongoose — 3 collections: users, tickets, comments
-- express-validator on all endpoints
-- Central error middleware (AppError + CastError + Mongoose validation)
-- Rate limiting on auth endpoints, helmet for security headers
-- MongoDB reconnection on disconnect with retry
+### Backend (`src/backend/`)
 
-### Frontend
-- React 19 + Vite + TypeScript + Tailwind CSS
-- React Query for server state, React Context for auth state
-- Axios with JWT interceptor + silent refresh on 401
-- URL-synced filter state (bookmarkable, browser back/forward works)
-- `TicketStatusControl` — derives valid transitions from `ALLOWED_TRANSITIONS` constant (same as backend)
-- Confirmation dialog for destructive transitions (Cancel, Close)
-- Route-level ErrorBoundary for unexpected render errors
+| Component | Files | Description |
+|-----------|-------|-------------|
+| **Routes** | `routes/index.js`, `ticketRoutes.js`, `commentRoutes.js`, `dashboardRoutes.js`, `ticketCommentRoutes.js` | RESTful API endpoints |
+| **Controllers** | `controllers/ticketController.js`, `commentController.js`, `dashboardController.js` | Request handling and response formatting |
+| **Models** | `models/Ticket.js`, `models/Comment.js` | Mongoose schemas with validation and state machine logic |
+| **Middleware** | `middleware/validation.js` | express-validator rules for all endpoints |
+| **Config** | `config/database.js` | MongoDB connection management |
+| **App** | `app.js`, `server.js` | Express app setup with CORS, helmet, morgan |
+
+### Frontend (`src/frontend/`)
+
+| Component | Files | Description |
+|-----------|-------|-------------|
+| **Pages** | `pages/Login/`, `Dashboard/`, `TicketList/`, `TicketDetail/`, `TicketCreate/` | Main application views |
+| **Components** | `components/Navigation.jsx`, `ProtectedRoute.jsx` | Shared UI components |
+| **Services** | `services/api.js`, `ticketsService.js`, `commentsService.js`, `dashboardService.js` | API communication layer |
+| **Store** | `store/slices/authSlice.js`, `ticketsSlice.js`, `dashboardSlice.js` | Redux state management |
+| **Routes** | `routes/index.jsx` | React Router configuration |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/tickets` | List tickets with pagination/filtering |
+| POST | `/api/tickets` | Create new ticket |
+| GET | `/api/tickets/:id` | Get ticket with comments |
+| PUT | `/api/tickets/:id` | Update ticket fields |
+| PATCH | `/api/tickets/:id/status` | Update status only |
+| DELETE | `/api/tickets/:id` | Delete ticket and comments |
+| GET | `/api/tickets/status/:status` | Get tickets by status |
+| POST | `/api/tickets/:ticketId/comments` | Add comment |
+| GET | `/api/tickets/:ticketId/comments` | List comments |
+| GET | `/api/dashboard/stats` | Dashboard statistics |
+| GET | `/api/dashboard/user/:userId` | User dashboard |
+| GET | `/health` | Health check |
 
 ---
 
+
 ## Database Changes
 
-- New collections: `users`, `tickets`, `comments`
-- Indexes: status, priority, assignedTo, createdBy, createdAt on tickets; (ticket, createdAt) on comments
-- Seed script creates 5 users (1 admin, 2 agents, 2 users)
+### Collections
+
+**tickets**
+```javascript
+{
+  title: String,          // 3-100 chars, required
+  description: String,    // 10-2000 chars, required
+  status: String,         // enum: open, in_progress, resolved, closed, cancelled
+  priority: String,       // enum: low, medium, high, critical
+  assignee: String,       // 2-50 chars, required
+  reporter: String,       // 2-50 chars, required
+  labels: [String],       // optional array
+  resolutionDate: Date,   // set on resolve/close
+  createdDate: Date,      // auto-set
+  updatedDate: Date       // auto-updated
+}
+```
+
+**comments**
+```javascript
+{
+  ticketId: ObjectId,     // reference to ticket
+  content: String,        // 1-1000 chars, required
+  author: String,         // 2-50 chars, required
+  timestamp: Date         // auto-set
+}
+```
+
+### Indexes
+- `tickets.status` - Filter by status
+- `tickets.priority` - Filter by priority
+- `tickets.assignee` - Filter by assignee
+- `tickets.createdDate` - Sort by creation date
+- `comments.ticketId` - Find comments for ticket
 
 ---
 
 ## Testing Done
 
-- 26 integration tests (15 state machine + 11 CRUD) — all passing
-- TypeScript clean build: `tsc --noEmit` passes on both FE and BE
-- Production build: `npm run build` passes (190 modules, 0 errors)
-- Manual smoke test: full user journey from login to ticket creation to status transitions
+### Backend Tests
+```bash
+cd src/backend && npm test
+```
+
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| `ticketController.test.js` | 25+ | CRUD operations, validation, filtering |
+| `commentController.test.js` | 10+ | Add/list comments, validation |
+| `dashboardController.test.js` | 5+ | Stats, KPIs, user dashboard |
+| `stateMachine.test.js` | 20+ | All valid/invalid transitions |
+| `Ticket.test.js` | 15+ | Model validation, state machine logic |
+| `Comment.test.js` | 8+ | Model validation |
+
+### Frontend Tests
+```bash
+cd src/frontend && npm test
+```
+
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| `App.test.jsx` | 7 | Routing, auth state, Redux integration |
+
+### Manual Testing
+- [x] Created tickets with all field combinations
+- [x] Verified all status transitions (valid and invalid)
+- [x] Tested search and filter combinations
+- [x] Confirmed pagination works correctly
+- [x] Verified comments add and display properly
+- [x] Tested error states and validation messages
 
 ---
+
 
 ## AI Usage Summary
 
-Built entirely using **Kiro** as the primary AI tool. Key AI contributions:
-- Requirements analysis and structured documentation
-- Layered architecture design with explicit trade-off decisions
-- Complete TypeScript code generation phase-by-phase
-- Root cause analysis for 6 bugs found during testing
-- Integration test case generation (15 state machine cases)
-- Code review against defined coding guidelines
+### How AI Was Used
 
-See `ai-prompts/` for categorised prompt history and `tool-workflow.md` for methodology.
+| Phase | AI Contribution |
+|-------|-----------------|
+| **Requirements** | Analyzed requirements, created documentation templates |
+| **Design** | Architected API structure, designed state machine |
+| **Implementation** | Generated boilerplate, controllers, services, components |
+| **Testing** | Created comprehensive integration tests including state machine |
+| **Debugging** | Diagnosed CORS issues, routing problems, event handler bugs |
+| **Documentation** | Generated API contract, test strategy, reflection docs |
+
+### AI Strengths
+- Fast generation of boilerplate and scaffolding
+- Comprehensive test case generation
+- Consistent documentation formatting
+- Quick debugging with error context provided
+
+### AI Limitations
+- Required human verification of generated code
+- Some routing issues needed manual debugging
+- Over-suggested features beyond project scope
+- Validation message inconsistencies needed manual fixes
+
+### Validation Approach
+- Reviewed all generated code before integration
+- Ran test suites to verify functionality
+- Manual testing in browser with DevTools
+- Cross-referenced with documentation
 
 ---
 
+## Screenshots / Demo Notes
+
+### Running the Application
+
+**Backend:**
+```bash
+cd src/backend
+npm install
+npm start
+# Server runs at http://localhost:3000
+```
+
+**Frontend:**
+```bash
+cd src/frontend
+npm install
+npm run dev
+# App runs at http://localhost:3001
+```
+
+### Demo Credentials
+- **Username:** `demo`
+- **Password:** `demo123`
+
+### Key Screens
+1. **Login** - Centered form with demo credentials button
+2. **Dashboard** - Ticket stats, priority breakdown, recent activity
+3. **Ticket List** - Searchable, filterable table with pagination
+4. **Ticket Detail** - Full info with comments section
+5. **Create/Edit Ticket** - Form with validation feedback
+
+### Demo Flow
+1. Login with demo credentials
+2. View dashboard statistics
+3. Navigate to ticket list
+4. Create a new ticket
+5. Update ticket status through workflow
+6. Add comments to ticket
+7. Search and filter tickets
+8. Delete a ticket
+
+---
+
+
 ## Known Limitations
 
-- Seeded users have synthetic Google IDs — they cannot log in via Google OAuth (only real Google accounts can log in)
-- No pagination on comments (out of scope for Core)
-- No email notifications on status change (out of scope)
-- No file attachments (out of scope)
+### Authentication
+- Demo authentication only (not production-ready)
+- No JWT validation or refresh token handling
+- No role-based access control
+
+### Data Persistence
+- Requires MongoDB running locally or via Docker
+- No data seeding script included
+- No backup/restore functionality
+
+### UI/UX
+- No dark mode support
+- Limited mobile responsiveness
+- No keyboard shortcuts
+- No accessibility audit completed
+
+### Performance
+- No caching implemented
+- No database query optimization
+- No pagination on comments
+
+### Security
+- No rate limiting on API endpoints
+- No request logging for audit
+- CORS configured for localhost only
+
+---
 
 ## Future Improvements
 
-- Add Swagger/OpenAPI documentation
-- Implement comment editing/deletion
-- Add real-time updates via WebSockets
-- Add email notifications on ticket assignment/status change
-- Docker setup for consistent local environment
+### Short-Term (Next Sprint)
+- [ ] Add TypeScript for type safety
+- [ ] Implement real JWT authentication
+- [ ] Add E2E tests with Cypress
+- [ ] Improve loading states with skeletons
+- [ ] Add form validation feedback
+
+### Medium-Term (Next Quarter)
+- [ ] Ticket history/audit log
+- [ ] File attachments support
+- [ ] Email notifications
+- [ ] User roles and permissions
+- [ ] Bulk operations (mass update/delete)
+
+### Long-Term (Future Releases)
+- [ ] Real-time updates via WebSocket
+- [ ] Advanced analytics with charts
+- [ ] Multi-tenancy support
+- [ ] Mobile application
+- [ ] Integration with external tools (Jira, Slack)
+
+---
+
+## Checklist
+
+- [x] Code follows project coding guidelines
+- [x] All tests pass
+- [x] State machine integration tests included
+- [x] API documentation updated
+- [x] No console errors in browser
+- [x] No TypeScript/lint errors
+- [x] Data persists after restart
+- [x] Error states handled in UI

@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
+import { dashboardService, ticketService } from '../../services/api'
 
 // Initial state for dashboard
 const initialState = {
@@ -24,17 +25,10 @@ const initialState = {
 // Async thunks for dashboard actions
 export const fetchKPIMetrics = createAsyncThunk(
   'dashboard/fetchKPIMetrics',
-  async (_, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      return {
-        totalTickets: 45,
-        openTickets: 12,
-        inProgressTickets: 8,
-        resolvedTickets: 20,
-        closedTickets: 5,
-      }
+      const response = await dashboardService.getDashboardStats(params)
+      return response.data.data
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch KPI metrics')
     }
@@ -43,18 +37,17 @@ export const fetchKPIMetrics = createAsyncThunk(
 
 export const fetchTicketsByPriority = createAsyncThunk(
   'dashboard/fetchTicketsByPriority',
-  async (_, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      return {
-        low: 15,
-        medium: 18,
-        high: 10,
-        critical: 2,
+      const response = await dashboardService.getDashboardStats(params)
+      return response.data.data.priorityBreakdown || {
+        low: 0,
+        medium: 0,
+        high: 0,
+        critical: 0,
       }
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch tickets by priority')
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch priority breakdown')
     }
   }
 )
@@ -63,67 +56,29 @@ export const fetchAssignedTickets = createAsyncThunk(
   'dashboard/fetchAssignedTickets',
   async (userId, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      return [
-        {
-          id: 1,
-          title: 'Fix login issue',
-          status: 'In Progress',
-          priority: 'High',
-          updatedDate: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          title: 'Update documentation',
-          status: 'Open',
-          priority: 'Medium',
-          updatedDate: new Date().toISOString(),
-        },
-      ]
+      const response = await dashboardService.getUserDashboard(userId);
+      return response.data.data.recentActivity || [];
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch assigned tickets')
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch assigned tickets');
     }
   }
-)
+);
 
 export const fetchRecentTickets = createAsyncThunk(
   'dashboard/fetchRecentTickets',
   async ({ limit = 10 }, { rejectWithValue }) => {
     try {
-      // This will be implemented when API service layer is ready
-      // For now, return mock data
-      return [
-        {
-          id: 3,
-          title: 'Database performance optimization',
-          status: 'Open',
-          priority: 'Critical',
-          reporter: 'Alice Johnson',
-          updatedDate: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-        },
-        {
-          id: 4,
-          title: 'UI component styling fixes',
-          status: 'Resolved',
-          priority: 'Low',
-          reporter: 'Bob Wilson',
-          updatedDate: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-        },
-        {
-          id: 5,
-          title: 'API endpoint authentication',
-          status: 'In Progress',
-          priority: 'High',
-          reporter: 'Carol Davis',
-          updatedDate: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), // 4 hours ago
-        },
-      ]
+      const response = await ticketService.getTickets({ 
+        limit, 
+        sortBy: 'updatedDate',
+        order: 'desc' 
+      });
+      return response.data.data.tickets || [];
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch recent tickets')
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch recent tickets');
     }
   }
-)
+);
 
 export const refreshDashboard = createAsyncThunk(
   'dashboard/refreshDashboard',

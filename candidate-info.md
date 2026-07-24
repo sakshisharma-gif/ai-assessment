@@ -8,7 +8,7 @@
 **Project Option Selected:** Support Ticket Management System (Core)
 
 **Assessment Start Date:** July 20, 2026  
-**Submission Date:** [To be filled]
+**Submission Date:** July 20, 2026 
 
 ## Project Summary
 

@@ -1,213 +1,102 @@
 # Design Notes
 
-## Architecture Overview
+## Architecture Overview (frontend, backend, database)
+
+A three-tier full-stack application:
 
 ```
-Browser (React SPA)
-     │  HTTPS / REST JSON
-     ▼
-Express API (Node.js :5000)
-  ├── Routes → Controllers → Services → Repositories → Mongoose Models
-  ├── Middleware: Auth (JWT) | Validation | Error | Logger | CORS | Rate Limit
-     │
-     ▼
-MongoDB (localhost or Atlas)
-  Collections: users · tickets · comments
+┌─────────────────────┐      HTTP/JSON       ┌──────────────────────┐      Mongoose      ┌──────────────┐
+│      Frontend        │  ───────────────▶   │       Backend         │  ──────────────▶  │   Database    │
+│  React + Vite +      │   /api/*            │  Node.js + Express     │                   │   MongoDB     │
+│  Redux Toolkit       │  ◀───────────────   │  routes→controllers→   │  ◀──────────────  │  (persistent) │
+│  (SPA on :3001)      │   { status, data }  │  models                │                   │               │
+└─────────────────────┘                     │  (API on :3000)        │                   └──────────────┘
+                                             └──────────────────────┘
 ```
 
-**Key design decisions:**
-- Stateless API — JWT in memory (access) + HTTP-only cookie (refresh)
-- Repository pattern — all DB operations isolated from business logic
-- Single `ALLOWED_TRANSITIONS` constant shared as the state machine source of truth
-- `.toJSON()` called explicitly in repositories (not `.lean()`) to ensure consistent `id` mapping
+- **Frontend** is a single-page React app that talks to the backend exclusively through a JSON REST API via a single axios service layer.
+- **Backend** is a stateless Express API organized in layers (routes → validation middleware → controllers → Mongoose models). It is the **source of truth for business rules**, especially the status state machine.
+- **Database** is MongoDB accessed through Mongoose; it provides durable persistence so data survives restarts. Tests swap in MongoDB Memory Server for isolation and speed.
+- **Response contract:** every endpoint returns a uniform envelope — `{ status: 'success' | 'error', message?, data? }` — so the frontend handles success and failure consistently.
 
 ---
 
 ## Frontend Design
 
-**Stack**: React 19 + Vite + TypeScript + Tailwind CSS + React Query + Axios
-
-**Layout**: Fixed 240px dark sidebar (`#0f172a`) + flex-1 white main area
-
-**Component hierarchy**:
-```
-App (AuthProvider + QueryClientProvider + BrowserRouter)
-└── PrivateRoute
-    └── AppLayout (Sidebar + main content)
-        ├── TicketListPage → TicketFilters + TicketTable + Pagination
-        ├── CreateTicketPage → TicketForm
-        ├── TicketDetailPage → TicketInfo + TicketStatusControl + CommentList + AddCommentForm
-        └── EditTicketPage → TicketForm (pre-filled)
-```
-
-**State management**:
-- Server state: React Query (tickets, comments, users)
-- Auth state: React Context (user, accessToken)
-- UI state: local `useState` (filters, form fields)
-- URL state: `useSearchParams` for filters/pagination (bookmarkable)
-
-**Key UI decisions**:
-- Status transitions: only valid next states shown as buttons (derived from `ALLOWED_TRANSITIONS`)
-- Destructive transitions (CANCEL, CLOSE): confirmation dialog required
-- Backend 422 transition errors: shown inline below status control — never swallowed
-- CLOSED/CANCELLED tickets: Edit button disabled + edit route shows blocked state
+- **Stack:** React + Vite, Redux Toolkit for state, React Router for navigation.
+- **Structure:**
+  - `pages/` — `Login`, `Dashboard`, `TicketList`, `TicketDetail`, `TicketCreate`
+  - `components/` — reusable pieces (`TicketForm`, `Navigation`, `ProtectedRoute`)
+  - `store/slices/` — `authSlice`, `ticketsSlice`, `dashboardSlice` (async thunks calling the API)
+  - `store/selectors.js` — memoized selectors (filtered tickets, counts, KPIs)
+  - `services/api.js` — a single configured axios instance + `ticketService`, `commentService`, `dashboardService`, `authService`
+- **Data flow:** components dispatch thunks → thunks call the service layer → reducers update state → selectors feed components. UI never calls axios directly.
+- **API instance:** base URL from env, request interceptor attaches the auth token, response interceptor centralizes error shaping and 401 handling.
+- **State-machine in the UI:** the ticket status dropdown only offers the current status plus its valid next states (a client-side mirror of the backend rules) so users can't even choose an illegal transition; the backend still enforces it.
+- **UX states:** every page renders explicit loading, empty, and error states; forms show inline field-level validation that mirrors backend rules.
 
 ---
 
 ## Backend Design
 
-**Stack**: Express + TypeScript + Mongoose + Passport + JWT
-
-**Layered architecture**:
-```
-Route (register endpoints)
-  → Validator (express-validator chains)
-    → Auth Middleware (JWT verify)
-      → Controller (extract request data)
-        → Service (business logic, state machine)
-          → Repository (DB operations only)
-            → Mongoose Model (schema)
-```
-
-**State machine** (single constant, never scattered conditionals):
-```ts
-const ALLOWED_TRANSITIONS = {
-  OPEN:        ['IN_PROGRESS', 'CANCELLED'],
-  IN_PROGRESS: ['RESOLVED',    'CANCELLED'],
-  RESOLVED:    ['CLOSED'],
-  CLOSED:      [],
-  CANCELLED:   [],
-};
-```
-
-**Auth flow**: Google OAuth → Passport strategy → find/create user → sign JWT → set refresh cookie → redirect to `/auth/callback?token=<access>` → FE stores in memory
+- **Stack:** Node.js + Express; `app.js` builds the app, `server.js` handles startup/shutdown (separation aids testability).
+- **Layers:**
+  - `routes/` — declare endpoints and attach validation middleware (`ticketRoutes`, `ticketCommentRoutes` with `mergeParams`, `commentRoutes`, `dashboardRoutes`)
+  - `middleware/validation.js` — `express-validator` rule sets + a shared `handleValidationErrors`
+  - `controllers/` — request handling and business logic (`ticketController`, `commentController`, `dashboardController`)
+  - `models/` — Mongoose schemas + domain methods
+  - `config/database.js` — connection management with retries
+- **Cross-cutting:** `helmet` (security headers), `cors` (restricted to known origins via `FRONTEND_URL`), `morgan` (logging), JSON body parsing, health-check endpoints (`/health`, `/health/database`).
+- **State machine ownership:** transition rules live in one place (`Ticket.STATUS_TRANSITIONS` + `ticket.canTransitionTo`) and are enforced in both `PUT /api/tickets/:id` and `PATCH /api/tickets/:id/status`.
+- **Consistency:** all endpoints return the shared `{ status, message, data }` envelope; errors map to appropriate codes (400 validation, 404 not found, 500 unexpected).
 
 ---
 
 ## Database Design
 
-Three collections: `users`, `tickets`, `comments`
-
-**Indexes:**
-- `tickets`: status, priority, assignedTo, createdBy, createdAt
-- `comments`: (ticket, createdAt) compound
-
-**Relationships**: MongoDB references (not embeds) — tickets and comments queryable independently
-
-See `data-model.md` for full schema details.
+- **Engine:** MongoDB with Mongoose ODM; persistent in the running app, in-memory (MongoDB Memory Server) for tests.
+- **Collections:**
+  - **Ticket** — `title`, `description`, `status` (enum: open/in_progress/resolved/closed/cancelled), `priority` (enum: low/medium/high/critical), `assignee`, `reporter`, `labels[]`, `resolutionDate`, plus timestamps mapped to `createdDate` / `updatedDate`.
+  - **Comment** — `ticketId` (ref → Ticket), `content`, `author`, `timestamp` (+ created/updated timestamps).
+- **Relationships:** comments reference their ticket by `ticketId`; deleting a ticket cascades to its comments (no orphans).
+- **Domain logic in the model:**
+  - `pre('save')` sets `resolutionDate` when a ticket becomes resolved/closed and clears it otherwise.
+  - `canTransitionTo()` enforces the state machine.
+  - `toJSON` transform exposes `id` (from `_id`) and hides `__v`.
+- **Indexes:** on `status`, `priority`, `assignee`, `createdDate`, `updatedDate`, and a compound `ticketId + createdDate` on comments — to keep list/filter/search queries responsive.
 
 ---
 
 ## Validation Strategy
 
-- Backend is the authoritative guard — all validation at the controller boundary via express-validator
-- Frontend mirrors validation for UX (inline field errors) but backend rejects regardless
-- All incoming data validated before any DB operation
-- Status transitions validated in service layer (not controller) — belongs to business logic
+- **Backend is authoritative.** Two layers:
+  1. **Request validation** via `express-validator` rule sets (`validateCreateTicket`, `validateUpdateTicket`, `validateAddComment`, `validateDashboardQuery`, resource-param checks) plus a shared `handleValidationErrors` that returns `400` with a field-level message.
+  2. **Schema validation** in Mongoose (required fields, enums, min/max lengths) as a second line of defense.
+- **Rules enforced:** title 3–100, description 10–2000, priority/status enums, assignee/reporter 2–50, comment content 1–1000 & author 2–50, valid ObjectId params, and state-machine transition validity.
+- **Frontend validation** mirrors these rules for immediate feedback, but is never the only gate — the client is treated as untrusted.
 
 ---
 
 ## Error Handling Strategy
 
-**Backend**: Single `errorMiddleware` — all errors flow through it:
-- `AppError` (known) → returns `statusCode`, `code`, `message`, optional field `errors[]`
-- `CastError` (invalid ObjectId) → 404
-- `ValidationError` (Mongoose) → 422
-- Unknown → 500 with generic message (no stack trace in production)
-
-**Frontend**:
-- React Query `isError` states → inline error messages per component
-- Axios 401 → silent refresh → retry → redirect to `/login` if refresh fails
-- Route-level `ErrorBoundary` → catches render errors → "Something went wrong" + reload button
-- Toast notifications for success/error on all mutations
+- **Uniform error shape:** `{ status: 'error', message, errors? }` for every failure.
+- **Status codes:** `400` (validation / invalid transition / malformed id), `404` (not found), `500` (unexpected), with a clear human-readable `message`.
+- **State-machine errors** return an explicit "Invalid status transition" message and leave the ticket unchanged.
+- **Frontend surfacing:**
+  - Network/unreachable → clear connectivity message.
+  - `404` → friendly not-found view with a back link.
+  - Validation/transition errors → inline, near the relevant control (never silently swallowed).
+  - Loading and empty states shown for all async operations and lists.
+- **Safety:** stack traces are never leaked to clients; secrets are never logged.
 
 ---
 
-## Testing Strategy
+## Testing Strategy Link
 
-See `test-strategy.md` for full details.
+Full testing approach, structure, and run instructions:
 
-Summary: Integration tests via Jest + Supertest against mongodb-memory-server. Each test creates isolated data, makes real HTTP requests, and asserts on response codes and body shape. No shared state between tests.
+- Root guide: [`tests/README.md`](./tests/README.md)
+- Backend guide (incl. **state-machine steps**): [`src/backend/__tests__/README.md`](./src/backend/__tests__/README.md)
+- Latest run report: [`test-results.md`](./test-results.md)
 
----
-
-## Appendix A — Full Technical Architecture
-
-> The following sections are extracted from `technical-architecture.md` (the full document in the repo root docs folder).
-
-### Request Lifecycle (End-to-End Trace)
-
-Example: `PATCH /api/tickets/:id/status` — "Mark In Progress"
-
-```
-Browser → useTransitionStatus hook → Axios (Bearer JWT)
-  → Express Router (matches PATCH /tickets/:id/status)
-  → transitionStatusSchema (express-validator)
-  → validateMiddleware (422 if invalid)
-  → authenticate middleware (verify JWT → req.user)
-  → transitionStatus controller
-  → ticketService.transitionStatus (checks ALLOWED_TRANSITIONS)
-  → ticketRepository.updateStatus (Mongoose findByIdAndUpdate)
-  → MongoDB write
-  → Controller sends 200 { success, data, message }
-  → Axios receives → React Query invalidates cache → UI re-renders
-```
-
-### Architectural Decision Records (Summary)
-
-| ADR | Decision | Why |
-|---|---|---|
-| ADR-001 | Tailwind CSS over CSS Modules | Co-located styles, design system constraints, no naming overhead |
-| ADR-002 | Context API for auth + Zustand for UI state | Auth changes rarely; Zustand lightweight for UI state |
-| ADR-003 | React Query for server state | Caching, background refetch, invalidation — out of the box |
-| ADR-004 | Repository layer between Services and Models | Decouples business logic from ORM, enables unit testing |
-| ADR-005 | express-validator for request validation | Native Express integration; Zod used for env config only |
-
----
-
-## Appendix B — UI/UX Design System
-
-> Design tokens and component specs extracted from `application-design.md`.
-
-### Colour Tokens
-
-| Token | Hex | Usage |
-|---|---|---|
-| Primary | `#2563eb` (blue-600) | Buttons, active nav, focus rings |
-| Sidebar bg | `#0f172a` (slate-900) | Fixed sidebar background |
-| Page bg | `#f8fafc` (slate-50) | Main content area |
-| Card bg | `#ffffff` | White cards and panels |
-| Error | `#ef4444` (red-500) | Errors, destructive actions |
-
-### Status Badge Colours
-
-| Status | Tailwind |
-|---|---|
-| Open | `bg-blue-100 text-blue-700` |
-| In Progress | `bg-yellow-100 text-yellow-700` |
-| Resolved | `bg-green-100 text-green-700` |
-| Closed | `bg-slate-100 text-slate-600` |
-| Cancelled | `bg-red-100 text-red-700` |
-
-### Priority Badge Colours
-
-| Priority | Tailwind |
-|---|---|
-| Low | `bg-green-100 text-green-700` |
-| Medium | `bg-yellow-100 text-yellow-700` |
-| High | `bg-orange-100 text-orange-700` |
-| Critical | `bg-red-100 text-red-700` |
-
-### Typography
-
-- Font: **Inter** (Google Fonts, weights 400/500/600/700)
-- Page title: `text-2xl font-bold text-slate-800`
-- Body: `text-sm text-slate-800`
-- Muted: `text-xs text-slate-400`
-
-### Layout
-
-- Sidebar: 240px fixed, `bg-slate-900`
-- Main area: `flex-1`, `bg-slate-50`
-- Page padding: `px-8 py-8`
-- Max content width: `max-w-screen-xl`
+Highlights: unit tests (models, incl. `canTransitionTo`), integration tests for full CRUD + comments, and the **mandatory state-machine integration tier** (`src/backend/__tests__/integration/stateMachine.test.js`) proving every valid transition succeeds and every invalid one is rejected on both status endpoints. Frontend tests cover Redux slices, selectors, the ticket form, and the dashboard.

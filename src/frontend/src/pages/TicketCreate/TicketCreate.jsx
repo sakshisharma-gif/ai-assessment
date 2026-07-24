@@ -19,7 +19,7 @@ const TicketCreate = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    priority: 'Medium',
+    priority: 'medium',
     assignee: '',
     labels: '',
   })
@@ -68,7 +68,7 @@ const TicketCreate = () => {
 
     const ticketData = {
       ...formData,
-      status: 'Open',
+      status: 'open',
       reporter: user?.username || user?.fullName || 'Unknown',
       labels: formData.labels ? formData.labels.split(',').map(l => l.trim()) : [],
     }
@@ -84,7 +84,7 @@ const TicketCreate = () => {
     setFormData({
       title: '',
       description: '',
-      priority: 'Medium',
+      priority: 'medium',
       assignee: '',
       labels: '',
     })
@@ -170,10 +170,10 @@ const TicketCreate = () => {
                   className={errors.priority ? 'error' : ''}
                   disabled={loading}
                 >
-                  <option value="Low">🟢 Low</option>
-                  <option value="Medium">🟡 Medium</option>
-                  <option value="High">🟠 High</option>
-                  <option value="Critical">🔴 Critical</option>
+                  <option value="low">🟢 Low</option>
+                  <option value="medium">🟡 Medium</option>
+                  <option value="high">🟠 High</option>
+                  <option value="critical">🔴 Critical</option>
                 </select>
                 {errors.priority && (
                   <span className="error-text">{errors.priority}</span>

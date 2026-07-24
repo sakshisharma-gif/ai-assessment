@@ -77,23 +77,38 @@ describe('Express Application', () => {
   });
 
   describe('CORS Headers', () => {
-    test('OPTIONS request - should include CORS headers', async () => {
+    const allowedOrigin = 'http://localhost:3001';
+
+    test('OPTIONS preflight from an allowed origin - should include CORS headers', async () => {
       const response = await request(app)
         .options('/health')
+        .set('Origin', allowedOrigin)
+        .set('Access-Control-Request-Method', 'GET')
         .expect(204);
 
-      // Check CORS headers
-      expect(response.headers['access-control-allow-origin']).toBeDefined();
+      // Check CORS headers reflect the allowed origin
+      expect(response.headers['access-control-allow-origin']).toBe(allowedOrigin);
       expect(response.headers['access-control-allow-methods']).toBeDefined();
     });
 
-    test('GET request - should include CORS headers', async () => {
+    test('GET request from an allowed origin - should include CORS headers', async () => {
       const response = await request(app)
         .get('/health')
+        .set('Origin', allowedOrigin)
         .expect(200);
 
-      // Check CORS headers
-      expect(response.headers['access-control-allow-origin']).toBeDefined();
+      // Check CORS headers reflect the allowed origin
+      expect(response.headers['access-control-allow-origin']).toBe(allowedOrigin);
+      expect(response.headers['access-control-allow-credentials']).toBe('true');
+    });
+
+    test('GET request from a disallowed origin - should not reflect that origin', async () => {
+      const response = await request(app)
+        .get('/health')
+        .set('Origin', 'http://evil.example.com');
+
+      // The disallowed origin must never be echoed back
+      expect(response.headers['access-control-allow-origin']).not.toBe('http://evil.example.com');
     });
   });
 

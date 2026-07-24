@@ -93,22 +93,31 @@ const TicketList = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      'Open': 'status-open',
-      'In Progress': 'status-progress',
-      'Resolved': 'status-resolved',
-      'Closed': 'status-closed',
+      'open': 'status-open',
+      'in_progress': 'status-progress',
+      'resolved': 'status-resolved',
+      'closed': 'status-closed',
+      'cancelled': 'status-cancelled',
     }
     return colors[status] || 'status-default'
   }
 
   const getPriorityColor = (priority) => {
     const colors = {
-      'Critical': 'priority-critical',
-      'High': 'priority-high',
-      'Medium': 'priority-medium',
-      'Low': 'priority-low',
+      'critical': 'priority-critical',
+      'high': 'priority-high',
+      'medium': 'priority-medium',
+      'low': 'priority-low',
     }
     return colors[priority] || 'priority-default'
+  }
+
+  const formatLabel = (value) => {
+    if (!value) return ''
+    return value
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
   }
 
   if (loading && tickets.length === 0) {
@@ -159,10 +168,11 @@ const TicketList = () => {
             className="filter-select"
           >
             <option value="">All Status</option>
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Closed">Closed</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+            <option value="cancelled">Cancelled</option>
           </select>
 
           <select
@@ -171,10 +181,10 @@ const TicketList = () => {
             className="filter-select"
           >
             <option value="">All Priority</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
           </select>
 
           <input
@@ -220,7 +230,6 @@ const TicketList = () => {
       ) : (
         <div className="tickets-table">
           <div className="table-header">
-            <div className="col-id">ID</div>
             <div className="col-title">Title</div>
             <div className="col-status">Status</div>
             <div className="col-priority">Priority</div>
@@ -232,7 +241,6 @@ const TicketList = () => {
           <div className="table-body">
             {filteredTickets.map((ticket) => (
               <div key={ticket.id} className="table-row">
-                <div className="col-id">#{ticket.id}</div>
                 <div className="col-title">
                   <Link to={`/tickets/${ticket.id}`} className="ticket-title-link">
                     {ticket.title}
@@ -240,12 +248,12 @@ const TicketList = () => {
                 </div>
                 <div className="col-status">
                   <span className={`status-badge ${getStatusColor(ticket.status)}`}>
-                    {ticket.status}
+                    {formatLabel(ticket.status)}
                   </span>
                 </div>
                 <div className="col-priority">
                   <span className={`priority-badge ${getPriorityColor(ticket.priority)}`}>
-                    {ticket.priority}
+                    {formatLabel(ticket.priority)}
                   </span>
                 </div>
                 <div className="col-assignee">{ticket.assignee || 'Unassigned'}</div>

@@ -25,10 +25,22 @@ app.use(helmet({
 }));
 
 // CORS configuration - Allow cross-origin requests from frontend
+// Supports a comma-separated list of origins via FRONTEND_URL, with sensible dev defaults
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3001,http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (e.g. curl, mobile apps, same-origin)
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -82,8 +94,9 @@ app.get('/health/database', (req, res) => {
   });
 });
 
-// API routes will be added here
-// TODO: Add route handlers for tickets, comments, dashboard, etc.
+// Import and use API routes
+const apiRoutes = require('./routes');
+app.use('/api', apiRoutes);
 
 // 404 handler for undefined routes
 app.use((req, res) => {

@@ -7,6 +7,7 @@ import ticketsReducer, {
   clearCurrentTicket,
   fetchTickets,
   createTicket,
+  addComment,
 } from '../../store/slices/ticketsSlice'
 
 // Test store setup
@@ -32,6 +33,7 @@ describe('Tickets Slice', () => {
         tickets: [],
         currentTicket: null,
         loading: false,
+        commentLoading: false,
         error: null,
         filters: {
           status: '',
@@ -176,6 +178,45 @@ describe('Tickets Slice', () => {
 
       expect(state.loading).toBe(false)
       expect(state.error).toBe(errorMessage)
+    })
+
+    it('should append a comment to the current ticket on addComment.fulfilled', () => {
+      const currentTicket = { id: 't1', title: 'Ticket with comments', comments: [] }
+      store = configureStore({
+        reducer: { tickets: ticketsReducer },
+        preloadedState: {
+          tickets: {
+            tickets: [],
+            currentTicket,
+            loading: false,
+            commentLoading: false,
+            error: null,
+            filters: { status: '', priority: '', assignee: '', search: '' },
+            pagination: { currentPage: 1, pageSize: 10, totalPages: 0, totalCount: 0 },
+          },
+        },
+      })
+
+      const newComment = {
+        id: 'c1',
+        content: 'A new comment',
+        author: 'Demo User',
+        timestamp: new Date().toISOString(),
+      }
+
+      store.dispatch(addComment.fulfilled(newComment, '', { ticketId: 't1' }))
+      const state = store.getState().tickets
+
+      expect(state.commentLoading).toBe(false)
+      expect(state.currentTicket.comments).toHaveLength(1)
+      expect(state.currentTicket.comments[0]).toEqual(newComment)
+    })
+
+    it('should set commentLoading on addComment.pending', () => {
+      store.dispatch(addComment.pending('', { ticketId: 't1' }))
+      const state = store.getState().tickets
+
+      expect(state.commentLoading).toBe(true)
     })
   })
 })

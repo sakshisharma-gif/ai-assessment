@@ -187,6 +187,12 @@
   border-color: #6b7280;
 }
 
+.status-cancelled { 
+  background: linear-gradient(45deg, #fee2e2, #fecaca); 
+  color: #991b1b; 
+  border-color: #ef4444;
+}
+
 .priority-critical { 
   background: linear-gradient(45deg, #fee2e2, #fecaca); 
   color: #991b1b; 

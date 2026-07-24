@@ -139,6 +139,46 @@ ticket-management-system/
 - ✅ 26 integration tests (15 state machine + 11 CRUD)
 - ✅ Data persists across server restarts
 
+---
+
+## Requirements Coverage
+
+Every required core feature is implemented and backed by automated tests. Paths are relative to the repo root; test commands run from `src/backend` (backend) or `src/frontend` (frontend).
+
+| # | Requirement | Backend (API + logic) | Frontend (UI) | Tests |
+|---|---|---|---|---|
+| 1 | **Create a ticket** | `POST /api/tickets` — `controllers/ticketController.js` (`createTicket`), `middleware/validation.js` (`validateCreateTicket`) | `src/frontend/src/pages/TicketCreate/TicketCreate.jsx`, `components/ticket/TicketForm.jsx` | `__tests__/controllers/ticketController.test.js` (Create ×5); `__tests__/components/TicketForm.test.jsx` |
+| 2 | **List tickets** | `GET /api/tickets` (pagination) — `getAllTickets` | `pages/TicketList/TicketList.jsx` | `ticketController.test.js` (Get All ×7) |
+| 3 | **View ticket details** | `GET /api/tickets/:id` (ticket + comments) — `getTicketById` | `pages/TicketDetail/TicketDetail.jsx` | `ticketController.test.js` (Get by ID ×3) |
+| 4 | **Update fields** (title, description, priority, assignee) | `PUT /api/tickets/:id` — `updateTicket` | `TicketDetail.jsx` edit mode / `TicketForm.jsx` | `ticketController.test.js` (Update ×6) |
+| 5 | **Change status via enforced state machine** | `PATCH /api/tickets/:id/status` + `PUT` — `models/Ticket.js` (`canTransitionTo`, `STATUS_TRANSITIONS`) | Constrained status dropdown + inline transition error in `TicketDetail.jsx` | **`__tests__/integration/stateMachine.test.js` (×38)**; `models/Ticket.test.js` unit checks |
+| 6 | **Add comments to a ticket** | `POST /api/tickets/:id/comments` — `controllers/commentController.js`, nested route with `mergeParams` | Comment form + list in `TicketDetail.jsx` | `__tests__/controllers/commentController.test.js` (×9) |
+| 7 | **Keyword search & filter by status** | `GET /api/tickets?search=&status=&priority=&assignee=` — `getAllTickets` | Search box + status/priority filters in `TicketList.jsx` | `ticketController.test.js` (filter/search cases) |
+| 8 | **Persist all data; survives restart** | MongoDB (Atlas) via `config/database.js` + Mongoose models | — | Verified live across restarts; suites use MongoDB Memory Server |
+| 9 | **Validate required fields; reject invalid input at backend** | `express-validator` (`middleware/validation.js`) + Mongoose schema validation → `400` responses | Client-side validation mirrors backend rules | Create/Update/Comment/Dashboard validation cases |
+| 10 | **Meaningful error states in the UI** | Consistent `{ status: 'error', message }` payloads | Error banners: `Login`, `TicketCreate`, `TicketList`; inline save/transition + comment errors in `TicketDetail` | `TicketForm.test.jsx`, `Dashboard.test.jsx` error-state tests |
+
+### Test status (latest run)
+
+| Suite | Location | Result |
+|---|---|---|
+| Backend (all) | `src/backend/__tests__/**` | ✅ 161/161 passing (8 suites) |
+| Frontend (all) | `src/frontend/src/__tests__/**` | ✅ 93/93 passing (7 files) |
+| State machine (mandatory tier) | `__tests__/integration/stateMachine.test.js` | ✅ 38/38 passing |
+
+Run everything:
+```bash
+# Backend
+cd src/backend && npm test
+
+# Frontend
+cd src/frontend && npm test -- --run
+```
+
+A detailed, up-to-date run report lives in [`test-results.md`](./test-results.md).
+
+---
+
 ## Seed Users
 
 After running `npm run seed` the following users are available:

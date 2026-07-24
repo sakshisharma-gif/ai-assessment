@@ -101,6 +101,55 @@ api.interceptors.response.use(
   }
 )
 
+/**
+ * Ticket Service
+ */
+export const ticketService = {
+  getTickets: (params = {}) => api.get('/tickets', { params }),
+  getTicketById: (id) => api.get(`/tickets/${id}`),
+  createTicket: (ticketData) => api.post('/tickets', ticketData),
+  updateTicket: (id, ticketData) => api.put(`/tickets/${id}`, ticketData),
+  updateTicketStatus: (id, status) => api.patch(`/tickets/${id}/status`, { status }),
+  deleteTicket: (id) => api.delete(`/tickets/${id}`),
+  getTicketsByStatus: (status, params = {}) => api.get(`/tickets/status/${status}`, { params }),
+  getTicketsByAssignee: (assignee, params = {}) => api.get(`/tickets/assignee/${assignee}`, { params }),
+}
+
+/**
+ * Comment Service
+ */
+export const commentService = {
+  getComments: (ticketId, params = {}) => api.get(`/tickets/${ticketId}/comments`, { params }),
+  addComment: (ticketId, commentData) => api.post(`/tickets/${ticketId}/comments`, commentData),
+  getCommentById: (id) => api.get(`/comments/${id}`),
+  updateComment: (id, commentData) => api.put(`/comments/${id}`, commentData),
+  deleteComment: (id) => api.delete(`/comments/${id}`),
+  getRecentComments: (params = {}) => api.get('/comments/recent', { params }),
+  getCommentStats: (ticketId) => api.get(`/tickets/${ticketId}/comments/stats`),
+}
+
+/**
+ * Dashboard Service
+ */
+export const dashboardService = {
+  getDashboardStats: (params = {}) => api.get('/dashboard/stats', { params }),
+  getDashboardTrends: (params = {}) => api.get('/dashboard/trends', { params }),
+  getTeamDashboard: (teamId) => api.get(`/dashboard/team/${teamId}`),
+  getUserDashboard: (userId) => api.get(`/dashboard/user/${userId}`),
+}
+
+/**
+ * Auth Service
+ */
+export const authService = {
+  login: (credentials) => api.post('/auth/login', credentials),
+  register: (userData) => api.post('/auth/register', userData),
+  refreshToken: () => api.post('/auth/refresh'),
+  logout: () => api.post('/auth/logout'),
+  getProfile: () => api.get('/auth/profile'),
+  updateProfile: (userData) => api.put('/auth/profile', userData),
+}
+
 // Helper function to handle API responses
 export const handleApiResponse = (response) => {
   return response.data

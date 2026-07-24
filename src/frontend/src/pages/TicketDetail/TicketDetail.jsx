@@ -5,11 +5,13 @@ import {
   selectCurrentTicket,
   selectTicketsLoading,
   selectTicketsError,
+  selectUser,
 } from '../../store/selectors'
 import {
   fetchTicketById,
   updateTicket,
   deleteTicket,
+  addComment,
 } from '../../store/slices/ticketsSlice'
 import './TicketDetail.css'
 
@@ -25,15 +27,34 @@ const TicketDetail = () => {
   const ticket = useSelector(selectCurrentTicket)
   const loading = useSelector(selectTicketsLoading)
   const error = useSelector(selectTicketsError)
+  const user = useSelector(selectUser)
   
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState({})
   const [newComment, setNewComment] = useState('')
+  const [commentError, setCommentError] = useState('')
+  const [submittingComment, setSubmittingComment] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  // Ticket status state machine (mirrors the backend rules).
+  // Used to only offer valid next statuses in the edit dropdown.
+  const STATUS_TRANSITIONS = {
+    open: ['in_progress', 'cancelled'],
+    in_progress: ['resolved', 'cancelled'],
+    resolved: ['closed'],
+    closed: [],
+    cancelled: [],
+  }
+
+  const getStatusOptions = (currentStatus) => {
+    const next = STATUS_TRANSITIONS[currentStatus] || []
+    return [currentStatus, ...next]
+  }
 
   useEffect(() => {
     if (id) {
-      dispatch(fetchTicketById(parseInt(id)))
+      dispatch(fetchTicketById(id))
     }
   }, [id, dispatch])
 
@@ -42,8 +63,8 @@ const TicketDetail = () => {
       setEditForm({
         title: ticket.title || '',
         description: ticket.description || '',
-        status: ticket.status || 'Open',
-        priority: ticket.priority || 'Medium',
+        status: ticket.status || 'open',
+        priority: ticket.priority || 'medium',
         assignee: ticket.assignee || '',
       })
     }
@@ -69,7 +90,8 @@ const TicketDetail = () => {
 
   const handleSaveChanges = async () => {
     if (!ticket) return
-    
+    setSaveError('')
+
     const result = await dispatch(updateTicket({
       ticketId: ticket.id,
       updates: editForm
@@ -77,6 +99,9 @@ const TicketDetail = () => {
     
     if (result.type === 'tickets/updateTicket/fulfilled') {
       setIsEditing(false)
+    } else {
+      // Surface backend validation errors (e.g. invalid status transitions) clearly
+      setSaveError(result.payload || 'Failed to update ticket')
     }
   }
 
@@ -91,11 +116,29 @@ const TicketDetail = () => {
 
   const handleAddComment = async (e) => {
     e.preventDefault()
-    if (!newComment.trim()) return
-    
-    // This would be implemented when API service layer is ready
-    console.log('Adding comment:', newComment)
-    setNewComment('')
+    setCommentError('')
+
+    const content = newComment.trim()
+    if (!content) {
+      setCommentError('Comment cannot be empty')
+      return
+    }
+
+    const author = user?.fullName || user?.username || user?.name || 'Anonymous'
+
+    setSubmittingComment(true)
+    const result = await dispatch(addComment({
+      ticketId: ticket.id,
+      content,
+      author,
+    }))
+    setSubmittingComment(false)
+
+    if (result.type === 'tickets/addComment/fulfilled') {
+      setNewComment('')
+    } else {
+      setCommentError(result.payload || 'Failed to add comment')
+    }
   }
 
   const formatDate = (dateString) => {
@@ -110,22 +153,31 @@ const TicketDetail = () => {
 
   const getStatusColor = (status) => {
     const colors = {
-      'Open': 'status-open',
-      'In Progress': 'status-progress',
-      'Resolved': 'status-resolved',
-      'Closed': 'status-closed',
+      'open': 'status-open',
+      'in_progress': 'status-progress',
+      'resolved': 'status-resolved',
+      'closed': 'status-closed',
+      'cancelled': 'status-cancelled',
     }
     return colors[status] || 'status-default'
   }
 
   const getPriorityColor = (priority) => {
     const colors = {
-      'Critical': 'priority-critical',
-      'High': 'priority-high',
-      'Medium': 'priority-medium',
-      'Low': 'priority-low',
+      'critical': 'priority-critical',
+      'high': 'priority-high',
+      'medium': 'priority-medium',
+      'low': 'priority-low',
     }
     return colors[priority] || 'priority-default'
+  }
+
+  const formatLabel = (value) => {
+    if (!value) return ''
+    return value
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
   }
 
   if (loading && !ticket) {
@@ -136,7 +188,7 @@ const TicketDetail = () => {
     )
   }
 
-  if (error) {
+  if (error && !ticket) {
     return (
       <div className="ticket-detail-page">
         <div className="error-message">
@@ -207,10 +259,11 @@ const TicketDetail = () => {
                     onChange={handleInputChange}
                     className="status-select"
                   >
-                    <option value="Open">Open</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="Resolved">Resolved</option>
-                    <option value="Closed">Closed</option>
+                    {getStatusOptions(ticket.status).map((option) => (
+                      <option key={option} value={option}>
+                        {formatLabel(option)}
+                      </option>
+                    ))}
                   </select>
                   <select
                     name="priority"
@@ -218,19 +271,19 @@ const TicketDetail = () => {
                     onChange={handleInputChange}
                     className="priority-select"
                   >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
                   </select>
                 </>
               ) : (
                 <>
                   <span className={`status-badge ${getStatusColor(ticket.status)}`}>
-                    {ticket.status}
+                    {formatLabel(ticket.status)}
                   </span>
                   <span className={`priority-badge ${getPriorityColor(ticket.priority)}`}>
-                    {ticket.priority}
+                    {formatLabel(ticket.priority)}
                   </span>
                 </>
               )}
@@ -257,6 +310,11 @@ const TicketDetail = () => {
 
           {isEditing && (
             <div className="edit-actions">
+              {saveError && (
+                <div className="error-message" role="alert">
+                  {saveError}
+                </div>
+              )}
               <button onClick={handleSaveChanges} className="save-button">
                 Save Changes
               </button>
@@ -273,13 +331,25 @@ const TicketDetail = () => {
             <form onSubmit={handleAddComment} className="add-comment-form">
               <textarea
                 value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
+                onChange={(e) => {
+                  setNewComment(e.target.value)
+                  if (commentError) setCommentError('')
+                }}
                 placeholder="Add a comment..."
                 className="comment-textarea"
                 rows="3"
+                maxLength={1000}
+                disabled={submittingComment}
               />
-              <button type="submit" className="add-comment-button">
-                Add Comment
+              {commentError && (
+                <span className="error-text">{commentError}</span>
+              )}
+              <button
+                type="submit"
+                className="add-comment-button"
+                disabled={submittingComment || !newComment.trim()}
+              >
+                {submittingComment ? 'Adding...' : 'Add Comment'}
               </button>
             </form>
 

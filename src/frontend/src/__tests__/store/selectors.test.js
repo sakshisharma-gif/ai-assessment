@@ -24,8 +24,8 @@ describe('Redux Selectors', () => {
           id: 1,
           title: 'Fix bug in login',
           description: 'Login form not working',
-          status: 'Open',
-          priority: 'High',
+          status: 'open',
+          priority: 'high',
           assignee: 'testuser',
           reporter: 'manager',
         },
@@ -33,8 +33,8 @@ describe('Redux Selectors', () => {
           id: 2,
           title: 'Update documentation',
           description: 'API docs need updating',
-          status: 'In Progress',
-          priority: 'Medium',
+          status: 'in_progress',
+          priority: 'medium',
           assignee: 'developer',
           reporter: 'testuser',
         },
@@ -42,8 +42,8 @@ describe('Redux Selectors', () => {
           id: 3,
           title: 'Database optimization',
           description: 'Query performance issues',
-          status: 'Closed',
-          priority: 'Critical',
+          status: 'closed',
+          priority: 'critical',
           assignee: 'dba',
           reporter: 'admin',
         },
@@ -96,14 +96,14 @@ describe('Redux Selectors', () => {
           ...mockState.tickets,
           filters: {
             ...mockState.tickets.filters,
-            status: 'Open',
+            status: 'open',
           },
         },
       }
 
       const result = selectFilteredTickets(stateWithFilter)
       expect(result).toHaveLength(1)
-      expect(result[0].status).toBe('Open')
+      expect(result[0].status).toBe('open')
     })
 
     it('should select filtered tickets with search filter', () => {
